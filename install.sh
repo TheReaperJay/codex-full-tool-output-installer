@@ -9,6 +9,7 @@ WORKDIR="${TMPDIR:-/tmp}/codex-full-tool-output-build"
 INSTALL_DIR=""
 KEEP_WORKDIR=false
 NO_BACKUP=false
+CONFIG_EDIT=true
 
 usage() {
   cat <<USAGE
@@ -21,6 +22,7 @@ Options:
                          If omitted, the installer detects your existing codex
                          binary location and replaces it in-place.
   --no-backup            Skip backing up the existing binary before replacing.
+  --no-config-edit       Do not modify ~/.codex/config.toml.
   --keep-workdir         Do not delete build directory after install.
   -h, --help             Show this help.
 
@@ -47,6 +49,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-backup)
       NO_BACKUP=true
+      shift
+      ;;
+    --no-config-edit)
+      CONFIG_EDIT=false
       shift
       ;;
     --keep-workdir)
@@ -149,6 +155,71 @@ else
   do_install true
 fi
 
+# --- Config update ---
+set_tool_output_display_full() {
+  local config_dir="$HOME/.codex"
+  local config_file="$config_dir/config.toml"
+  mkdir -p "$config_dir"
+
+  if [[ ! -f "$config_file" ]]; then
+    cat >"$config_file" <<'CFG'
+[tui]
+tool_output_display = "full"
+CFG
+    return
+  fi
+
+  local tmp
+  tmp="$(mktemp)"
+  awk '
+BEGIN {
+  in_tui = 0
+  found_tui = 0
+  updated = 0
+}
+function emit_setting() {
+  print "tool_output_display = \"full\""
+  updated = 1
+}
+/^\[[^]]+\][[:space:]]*$/ {
+  if (in_tui && !updated) {
+    emit_setting()
+  }
+  in_tui = ($0 ~ /^\[tui\][[:space:]]*$/)
+  if (in_tui) {
+    found_tui = 1
+  }
+  print
+  next
+}
+{
+  if (in_tui && $0 ~ /^[[:space:]]*tool_output_display[[:space:]]*=/) {
+    print "tool_output_display = \"full\""
+    updated = 1
+    next
+  }
+  print
+}
+END {
+  if (in_tui && !updated) {
+    emit_setting()
+  }
+  if (!found_tui) {
+    if (NR > 0) {
+      print ""
+    }
+    print "[tui]"
+    print "tool_output_display = \"full\""
+  }
+}
+' "$config_file" >"$tmp"
+  mv "$tmp" "$config_file"
+}
+
+if [[ "$CONFIG_EDIT" == true ]]; then
+  set_tool_output_display_full
+fi
+
 # --- Cleanup ---
 if [[ "$KEEP_WORKDIR" != true ]]; then
   rm -rf "$WORKDIR"
@@ -162,13 +233,19 @@ if [[ "$NO_BACKUP" != true ]] && [[ -f "${TARGET}.bak" ]]; then
   echo "Previous binary backed up to: ${TARGET}.bak"
 fi
 
-echo
-echo "Add this to ~/.codex/config.toml to enable full tool output:"
-echo
-cat <<'CFG'
+if [[ "$CONFIG_EDIT" == true ]]; then
+  echo "Configured ~/.codex/config.toml:"
+  echo "  [tui]"
+  echo "  tool_output_display = \"full\""
+else
+  echo
+  echo "Add this to ~/.codex/config.toml to enable full tool output:"
+  echo
+  cat <<'CFG'
   [tui]
   tool_output_display = "full"
 CFG
+fi
 
 echo
 if command -v codex >/dev/null 2>&1; then

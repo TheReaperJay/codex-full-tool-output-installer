@@ -104,6 +104,7 @@ If no existing `codex` is found on `PATH`, it defaults to `/usr/local/bin/codex`
 ./install.sh --install-dir ~/.local/bin   # install to a specific directory
 ./install.sh --codex-ref v0.116.0         # pin a specific upstream version
 ./install.sh --no-backup                  # skip backing up the old binary
+./install.sh --no-config-edit             # do not edit ~/.codex/config.toml
 ./install.sh --keep-workdir               # keep the build directory after install
 ```
 
@@ -111,12 +112,14 @@ If no existing `codex` is found on `PATH`, it defaults to `/usr/local/bin/codex`
 
 ## Configure
 
-Add to `~/.codex/config.toml`:
+By default, `install.sh` automatically sets this in `~/.codex/config.toml`:
 
 ```toml
 [tui]
 tool_output_display = "full"
 ```
+
+If you do not want the installer to edit your config, run with `--no-config-edit`.
 
 ---
 
