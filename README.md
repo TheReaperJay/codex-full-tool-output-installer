@@ -85,12 +85,27 @@ cd codex-full-tool-output-installer
 ./install.sh
 ```
 
-Installer does exactly this:
+The installer automatically detects your existing `codex` binary (via `which codex`), builds the patched version, and replaces it in-place. The old binary is backed up to `codex.bak` next to the original.
 
-1. Clones the latest `openai/codex`
-2. Applies the patch from this repo
-3. Builds Codex from source
-4. Installs the patched binary globally (or user-local)
+Installer steps:
+
+1. Detects where your current `codex` binary lives (e.g. `/usr/local/sbin/codex`)
+2. Clones the latest `openai/codex`
+3. Applies the patch from this repo
+4. Builds Codex from source (`cargo build --release`)
+5. Copies the patched binary to the detected location (requests `sudo` if needed)
+
+If no existing `codex` is found on `PATH`, it defaults to `/usr/local/bin/codex`.
+
+### Install options
+
+```
+./install.sh                              # auto-detect and replace existing codex
+./install.sh --install-dir ~/.local/bin   # install to a specific directory
+./install.sh --codex-ref v0.116.0         # pin a specific upstream version
+./install.sh --no-backup                  # skip backing up the old binary
+./install.sh --keep-workdir               # keep the build directory after install
+```
 
 ---
 
