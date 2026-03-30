@@ -77,7 +77,7 @@ Until upstream ships a native global fix, this repo provides a practical patch +
 
 ---
 
-## One-command install
+## Install (Current Stable: 0.117.0 Patch Track)
 
 ```bash
 git clone https://github.com/TheReaperJay/codex-full-tool-output-installer.git
@@ -85,28 +85,69 @@ cd codex-full-tool-output-installer
 ./install.sh
 ```
 
-The installer automatically detects your existing `codex` binary (via `which codex`), builds the patched version, and replaces it in-place. The old binary is backed up to `codex.bak` next to the original.
+`install.sh` is the **current-build installer**. It targets `rust-v0.117.0` by default (the release-aligned Rust tag for the currently packaged Codex line), applies this repo's patch, builds, and replaces your existing Codex binary in-place.
 
 Installer steps:
 
-1. Detects where your current `codex` binary lives (e.g. `/usr/local/sbin/codex`)
-2. Clones the latest `openai/codex`
+1. Chooses install target:
+   - default: replace currently installed `codex` executable
+   - npm installs: resolves through `codex.js` and replaces the underlying native vendor binary
+   - `--no-in-place`: install to `~/.local/bin/codex` instead
+   - `--install-dir <path>`: install to `<path>/codex`
+2. Clones `openai/codex` at `rust-v0.117.0` by default
 3. Applies the patch from this repo
 4. Builds Codex from source (`cargo build --release`)
-5. Copies the patched binary to the detected location (requests `sudo` if needed)
-
-If no existing `codex` is found on `PATH`, it defaults to `/usr/local/bin/codex`.
+5. Copies the patched binary to the chosen target (requests `sudo` if needed)
+6. Stops running processes using the target binary before replacement to avoid `Text file busy`
 
 ### Install options
 
 ```
-./install.sh                              # auto-detect and replace existing codex
+./install.sh                              # replace existing codex executable (default)
+./install.sh --no-in-place                # install to ~/.local/bin/codex
+./install.sh --in-place                   # explicit in-place replace
 ./install.sh --install-dir ~/.local/bin   # install to a specific directory
-./install.sh --codex-ref v0.116.0         # pin a specific upstream version
+./install.sh --codex-ref rust-v0.117.0    # pin explicit current-build ref
 ./install.sh --no-backup                  # skip backing up the old binary
 ./install.sh --no-config-edit             # do not edit ~/.codex/config.toml
 ./install.sh --keep-workdir               # keep the build directory after install
 ```
+
+## Install (Main Dev Track: Temporary Binary)
+
+```bash
+./install-main.sh
+```
+
+`install-main.sh` is the **main-branch installer**. It clones upstream `main`, overlays `modifications-main/`, builds, and installs a separate test binary (`~/.local/bin/codex-main` by default).
+
+Key behavior:
+
+- Does **not** overwrite your system `codex` unless you explicitly choose a conflicting target.
+- Intended for upstream PR prep and validating equivalent behavior on current `main`.
+- Also stops running processes using the target binary before replacement to avoid `Text file busy`.
+
+Examples:
+
+```bash
+./install-main.sh
+./install-main.sh --binary-name codex-main-test
+./install-main.sh --install-dir ~/.local/bin --binary-name codex-main
+```
+
+## Why Two Paths?
+
+- `rust-v0.117.0` (current packaged line): patch in `patches/codex-full-tool-output.patch` and source copies in `modifications/`.
+- `main` (active development branch): equivalent code lives in `modifications-main/`, because upstream file paths/layout differ from 0.117.0.
+
+In short:
+- **Current released build fix** -> `install.sh` + `modifications/`.
+- **Upstream PR/main development fix** -> `install-main.sh` + `modifications-main/`.
+
+## Source Trees
+
+- `modifications/` tracks the working patch against `rust-v0.117.0` (installer default).
+- `modifications-main/` tracks equivalent changes for current `main`, intended for upstream PR prep.
 
 ---
 

@@ -1,5 +1,5 @@
 diff --git a/codex-rs/core/src/config/config_tests.rs b/codex-rs/core/src/config/config_tests.rs
-index 00227fe..a76a00e 100644
+index 949906a..8898f44 100644
 --- a/codex-rs/core/src/config/config_tests.rs
 +++ b/codex-rs/core/src/config/config_tests.rs
 @@ -13,6 +13,7 @@ use crate::config::types::MemoriesToml;
@@ -18,7 +18,7 @@ index 00227fe..a76a00e 100644
              model_availability_nux: ModelAvailabilityNuxConfig {
                  shown_count: HashMap::from([
                      ("gpt-bar".to_string(), 4),
-@@ -961,6 +963,7 @@ fn tui_config_missing_notifications_field_defaults_to_enabled() {
+@@ -947,6 +949,7 @@ fn tui_config_missing_notifications_field_defaults_to_enabled() {
              status_line: None,
              terminal_title: None,
              theme: None,
@@ -26,7 +26,7 @@ index 00227fe..a76a00e 100644
              model_availability_nux: ModelAvailabilityNuxConfig::default(),
          }
      );
-@@ -4470,6 +4473,7 @@ fn test_precedence_fixture_with_o3_profile() -> std::io::Result<()> {
+@@ -4456,6 +4459,7 @@ fn test_precedence_fixture_with_o3_profile() -> std::io::Result<()> {
              tui_notification_method: Default::default(),
              animations: true,
              show_tooltips: true,
@@ -34,7 +34,7 @@ index 00227fe..a76a00e 100644
              model_availability_nux: ModelAvailabilityNuxConfig::default(),
              analytics_enabled: Some(true),
              feedback_enabled: true,
-@@ -4612,6 +4616,7 @@ fn test_precedence_fixture_with_gpt3_profile() -> std::io::Result<()> {
+@@ -4599,6 +4603,7 @@ fn test_precedence_fixture_with_gpt3_profile() -> std::io::Result<()> {
          tui_notification_method: Default::default(),
          animations: true,
          show_tooltips: true,
@@ -42,7 +42,7 @@ index 00227fe..a76a00e 100644
          model_availability_nux: ModelAvailabilityNuxConfig::default(),
          analytics_enabled: Some(true),
          feedback_enabled: true,
-@@ -4752,6 +4757,7 @@ fn test_precedence_fixture_with_zdr_profile() -> std::io::Result<()> {
+@@ -4740,6 +4745,7 @@ fn test_precedence_fixture_with_zdr_profile() -> std::io::Result<()> {
          tui_notification_method: Default::default(),
          animations: true,
          show_tooltips: true,
@@ -50,7 +50,7 @@ index 00227fe..a76a00e 100644
          model_availability_nux: ModelAvailabilityNuxConfig::default(),
          analytics_enabled: Some(false),
          feedback_enabled: true,
-@@ -4878,6 +4884,7 @@ fn test_precedence_fixture_with_gpt5_profile() -> std::io::Result<()> {
+@@ -4867,6 +4873,7 @@ fn test_precedence_fixture_with_gpt5_profile() -> std::io::Result<()> {
          tui_notification_method: Default::default(),
          animations: true,
          show_tooltips: true,
@@ -59,7 +59,7 @@ index 00227fe..a76a00e 100644
          analytics_enabled: Some(true),
          feedback_enabled: true,
 diff --git a/codex-rs/core/src/config/mod.rs b/codex-rs/core/src/config/mod.rs
-index 1a07221..545be4f 100644
+index b2b55fe..89459a9 100644
 --- a/codex-rs/core/src/config/mod.rs
 +++ b/codex-rs/core/src/config/mod.rs
 @@ -21,6 +21,7 @@ use crate::config::types::SandboxWorkspaceWrite;
@@ -70,7 +70,7 @@ index 1a07221..545be4f 100644
  use crate::config::types::ToolSuggestConfig;
  use crate::config::types::ToolSuggestDiscoverable;
  use crate::config::types::Tui;
-@@ -325,6 +326,9 @@ pub struct Config {
+@@ -347,6 +348,9 @@ pub struct Config {
      /// Show startup tooltips in the TUI welcome screen.
      pub show_tooltips: bool,
  
@@ -80,7 +80,7 @@ index 1a07221..545be4f 100644
      /// Persisted startup availability NUX state for model tooltips.
      pub model_availability_nux: ModelAvailabilityNuxConfig,
  
-@@ -2691,6 +2695,11 @@ impl Config {
+@@ -2714,6 +2718,11 @@ impl Config {
                  .unwrap_or_default(),
              animations: cfg.tui.as_ref().map(|t| t.animations).unwrap_or(true),
              show_tooltips: cfg.tui.as_ref().map(|t| t.show_tooltips).unwrap_or(true),
@@ -123,10 +123,10 @@ index 05fbaaa..68dca7a 100644
      #[serde(default)]
      pub model_availability_nux: ModelAvailabilityNuxConfig,
 diff --git a/codex-rs/tui_app_server/src/chatwidget.rs b/codex-rs/tui_app_server/src/chatwidget.rs
-index a343a41..f5f8adf 100644
+index 636349a..6f5200c 100644
 --- a/codex-rs/tui_app_server/src/chatwidget.rs
 +++ b/codex-rs/tui_app_server/src/chatwidget.rs
-@@ -4172,6 +4172,7 @@ impl ChatWidget {
+@@ -4113,6 +4113,7 @@ impl ChatWidget {
                      source,
                      ev.interaction_input.clone(),
                      self.config.animations,
@@ -134,7 +134,7 @@ index a343a41..f5f8adf 100644
                  );
                  let completed = orphan.complete_call(&ev.call_id, output, ev.duration);
                  debug_assert!(
-@@ -4193,6 +4194,7 @@ impl ChatWidget {
+@@ -4134,6 +4135,7 @@ impl ChatWidget {
                      source,
                      ev.interaction_input.clone(),
                      self.config.animations,
@@ -142,7 +142,7 @@ index a343a41..f5f8adf 100644
                  );
                  let completed = cell.complete_call(&ev.call_id, output, ev.duration);
                  debug_assert!(completed, "new exec cell should contain {}", ev.call_id);
-@@ -4385,6 +4387,7 @@ impl ChatWidget {
+@@ -4326,6 +4328,7 @@ impl ChatWidget {
                  ev.source,
                  interaction_input,
                  self.config.animations,
@@ -198,7 +198,7 @@ index 878d42c..0007be1 100644
          } else {
              None
 diff --git a/codex-rs/tui_app_server/src/exec_cell/render.rs b/codex-rs/tui_app_server/src/exec_cell/render.rs
-index 075b5a7..aca4235 100644
+index 1d5892a..71ebda5 100644
 --- a/codex-rs/tui_app_server/src/exec_cell/render.rs
 +++ b/codex-rs/tui_app_server/src/exec_cell/render.rs
 @@ -13,6 +13,7 @@ use crate::wrapping::RtOptions;
@@ -301,13 +301,13 @@ index 075b5a7..aca4235 100644
                  if !trimmed_output.is_empty() {
                      lines.extend(trimmed_output);
 diff --git a/codex-rs/tui_app_server/src/pager_overlay.rs b/codex-rs/tui_app_server/src/pager_overlay.rs
-index bca5f1f..930b393 100644
+index a9ab34a..7cb5672 100644
 --- a/codex-rs/tui_app_server/src/pager_overlay.rs
 +++ b/codex-rs/tui_app_server/src/pager_overlay.rs
 @@ -1014,6 +1014,7 @@ mod tests {
              ExecCommandSource::Agent,
-             /*interaction_input*/ None,
-             /*animations_enabled*/ true,
+             None,
+             true,
 +            codex_core::config::types::ToolOutputDisplay::Collapsed,
          );
          exec_cell.complete_call(
