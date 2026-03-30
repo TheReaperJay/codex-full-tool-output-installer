@@ -91,6 +91,7 @@ use codex_core::config::Constrained;
 use codex_core::config::ConstraintResult;
 use codex_core::config::types::ApprovalsReviewer;
 use codex_core::config::types::Notifications;
+use codex_core::config::types::ToolOutputDisplay;
 use codex_core::config::types::WindowsSandboxModeToml;
 use codex_core::config_loader::ConfigLayerStackOrdering;
 use codex_core::find_thread_name_by_id;
@@ -9085,6 +9086,31 @@ impl ChatWidget {
 
     #[cfg(not(target_os = "windows"))]
     pub(crate) fn clear_windows_sandbox_setup_status(&mut self) {}
+
+    pub(crate) fn tool_output_display(&self) -> ToolOutputDisplay {
+        self.config.tool_output_display
+    }
+
+    pub(crate) fn set_tool_output_display(&mut self, display: ToolOutputDisplay) {
+        self.config.tool_output_display = display;
+        if let Some(exec) = self
+            .active_cell
+            .as_mut()
+            .and_then(|cell| cell.as_any_mut().downcast_mut::<ExecCell>())
+        {
+            exec.set_tool_output_display(display);
+        }
+        self.request_redraw();
+    }
+
+    pub(crate) fn toggle_tool_output_display(&mut self) -> ToolOutputDisplay {
+        let next = match self.config.tool_output_display {
+            ToolOutputDisplay::Collapsed => ToolOutputDisplay::Full,
+            ToolOutputDisplay::Full => ToolOutputDisplay::Collapsed,
+        };
+        self.set_tool_output_display(next);
+        next
+    }
 
     /// Set the approval policy in the widget's config copy.
     pub(crate) fn set_approval_policy(&mut self, policy: AskForApproval) {

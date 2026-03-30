@@ -122,11 +122,101 @@ index 05fbaaa..68dca7a 100644
      /// Startup tooltip availability NUX state persisted by the TUI.
      #[serde(default)]
      pub model_availability_nux: ModelAvailabilityNuxConfig,
+diff --git a/codex-rs/tui_app_server/src/app.rs b/codex-rs/tui_app_server/src/app.rs
+index 95e231b..44dcbdf 100644
+--- a/codex-rs/tui_app_server/src/app.rs
++++ b/codex-rs/tui_app_server/src/app.rs
+@@ -22,6 +22,7 @@ use crate::chatwidget::ReplayKind;
+ use crate::chatwidget::ThreadInputState;
+ use crate::cwd_prompt::CwdPromptAction;
+ use crate::diff_render::DiffSummary;
++use crate::exec_cell::ExecCell;
+ use crate::exec_command::split_command_string;
+ use crate::exec_command::strip_bash_lc_and_escape;
+ use crate::external_editor;
+@@ -83,6 +84,7 @@ use codex_core::config::edit::ConfigEdit;
+ use codex_core::config::edit::ConfigEditsBuilder;
+ use codex_core::config::types::ApprovalsReviewer;
+ use codex_core::config::types::ModelAvailabilityNuxConfig;
++use codex_core::config::types::ToolOutputDisplay;
+ use codex_core::config_loader::ConfigLayerStackOrdering;
+ use codex_core::message_history;
+ use codex_core::models_manager::collaboration_mode_presets::CollaborationModesConfig;
+@@ -5385,6 +5387,46 @@ impl App {
+         tui.frame_requester().schedule_frame();
+     }
+ 
++    fn apply_tool_output_display_to_committed_exec_cells(
++        &mut self,
++        tool_output_display: ToolOutputDisplay,
++    ) -> bool {
++        let mut updated_any = false;
++        for cell in &mut self.transcript_cells {
++            let Some(cell) = Arc::get_mut(cell) else {
++                continue;
++            };
++            let Some(exec_cell) = cell.as_any_mut().downcast_mut::<ExecCell>() else {
++                continue;
++            };
++            exec_cell.set_tool_output_display(tool_output_display);
++            updated_any = true;
++        }
++        updated_any
++    }
++
++    fn toggle_tool_output_display(&mut self, tui: &mut tui::Tui) {
++        let tool_output_display = self.chat_widget.toggle_tool_output_display();
++        let committed_updated =
++            self.apply_tool_output_display_to_committed_exec_cells(tool_output_display);
++
++        if committed_updated {
++            if let Err(err) = self.clear_terminal_ui(tui, /*redraw_header*/ false) {
++                tracing::warn!(error = %err, "failed to refresh terminal UI after output toggle");
++                self.chat_widget
++                    .add_error_message(format!("Failed to refresh terminal UI: {err}"));
++                return;
++            }
++            self.queue_clear_ui_header(tui);
++            self.render_transcript_once(tui);
++        }
++
++        if let Some(Overlay::Transcript(overlay)) = &mut self.overlay {
++            overlay.replace_cells(self.transcript_cells.clone());
++        }
++        tui.frame_requester().schedule_frame();
++    }
++
+     async fn handle_key_event(
+         &mut self,
+         tui: &mut tui::Tui,
+@@ -5430,6 +5472,14 @@ impl App {
+         }
+ 
+         match key_event {
++            KeyEvent {
++                code: KeyCode::Char(c),
++                modifiers: crossterm::event::KeyModifiers::CONTROL,
++                kind: KeyEventKind::Press,
++                ..
++            } if c.eq_ignore_ascii_case(&'o') => {
++                self.toggle_tool_output_display(tui);
++            }
+             KeyEvent {
+                 code: KeyCode::Char('t'),
+                 modifiers: crossterm::event::KeyModifiers::CONTROL,
 diff --git a/codex-rs/tui_app_server/src/chatwidget.rs b/codex-rs/tui_app_server/src/chatwidget.rs
-index 636349a..6f5200c 100644
+index 636349a..b14881e 100644
 --- a/codex-rs/tui_app_server/src/chatwidget.rs
 +++ b/codex-rs/tui_app_server/src/chatwidget.rs
-@@ -4113,6 +4113,7 @@ impl ChatWidget {
+@@ -91,6 +91,7 @@ use codex_core::config::Constrained;
+ use codex_core::config::ConstraintResult;
+ use codex_core::config::types::ApprovalsReviewer;
+ use codex_core::config::types::Notifications;
++use codex_core::config::types::ToolOutputDisplay;
+ use codex_core::config::types::WindowsSandboxModeToml;
+ use codex_core::config_loader::ConfigLayerStackOrdering;
+ use codex_core::find_thread_name_by_id;
+@@ -4113,6 +4114,7 @@ impl ChatWidget {
                      source,
                      ev.interaction_input.clone(),
                      self.config.animations,
@@ -134,7 +224,7 @@ index 636349a..6f5200c 100644
                  );
                  let completed = orphan.complete_call(&ev.call_id, output, ev.duration);
                  debug_assert!(
-@@ -4134,6 +4135,7 @@ impl ChatWidget {
+@@ -4134,6 +4136,7 @@ impl ChatWidget {
                      source,
                      ev.interaction_input.clone(),
                      self.config.animations,
@@ -142,7 +232,7 @@ index 636349a..6f5200c 100644
                  );
                  let completed = cell.complete_call(&ev.call_id, output, ev.duration);
                  debug_assert!(completed, "new exec cell should contain {}", ev.call_id);
-@@ -4326,6 +4328,7 @@ impl ChatWidget {
+@@ -4326,6 +4329,7 @@ impl ChatWidget {
                  ev.source,
                  interaction_input,
                  self.config.animations,
@@ -150,6 +240,38 @@ index 636349a..6f5200c 100644
              )));
              self.bump_active_cell_revision();
          }
+@@ -9083,6 +9087,31 @@ impl ChatWidget {
+     #[cfg(not(target_os = "windows"))]
+     pub(crate) fn clear_windows_sandbox_setup_status(&mut self) {}
+ 
++    pub(crate) fn tool_output_display(&self) -> ToolOutputDisplay {
++        self.config.tool_output_display
++    }
++
++    pub(crate) fn set_tool_output_display(&mut self, display: ToolOutputDisplay) {
++        self.config.tool_output_display = display;
++        if let Some(exec) = self
++            .active_cell
++            .as_mut()
++            .and_then(|cell| cell.as_any_mut().downcast_mut::<ExecCell>())
++        {
++            exec.set_tool_output_display(display);
++        }
++        self.request_redraw();
++    }
++
++    pub(crate) fn toggle_tool_output_display(&mut self) -> ToolOutputDisplay {
++        let next = match self.config.tool_output_display {
++            ToolOutputDisplay::Collapsed => ToolOutputDisplay::Full,
++            ToolOutputDisplay::Full => ToolOutputDisplay::Collapsed,
++        };
++        self.set_tool_output_display(next);
++        next
++    }
++
+     /// Set the approval policy in the widget's config copy.
+     pub(crate) fn set_approval_policy(&mut self, policy: AskForApproval) {
+         if let Err(err) = self.config.permissions.approval_policy.set(policy) {
 diff --git a/codex-rs/tui_app_server/src/exec_cell/model.rs b/codex-rs/tui_app_server/src/exec_cell/model.rs
 index 878d42c..0007be1 100644
 --- a/codex-rs/tui_app_server/src/exec_cell/model.rs
@@ -198,7 +320,7 @@ index 878d42c..0007be1 100644
          } else {
              None
 diff --git a/codex-rs/tui_app_server/src/exec_cell/render.rs b/codex-rs/tui_app_server/src/exec_cell/render.rs
-index 1d5892a..71ebda5 100644
+index 1d5892a..ffb4b50 100644
 --- a/codex-rs/tui_app_server/src/exec_cell/render.rs
 +++ b/codex-rs/tui_app_server/src/exec_cell/render.rs
 @@ -13,6 +13,7 @@ use crate::wrapping::RtOptions;
@@ -209,7 +331,16 @@ index 1d5892a..71ebda5 100644
  use codex_protocol::parse_command::ParsedCommand;
  use codex_protocol::protocol::ExecCommandSource;
  use codex_shell_command::bash::extract_bash_command;
-@@ -44,8 +45,9 @@ pub(crate) fn new_active_exec_command(
+@@ -28,6 +29,8 @@ use unicode_width::UnicodeWidthStr;
+ 
+ pub(crate) const TOOL_CALL_MAX_LINES: usize = 5;
+ const USER_SHELL_TOOL_CALL_MAX_LINES: usize = 50;
++const TOOL_OUTPUT_EXPAND_HINT: &str = "[ctrl + o to expand output]";
++const TOOL_OUTPUT_COLLAPSE_HINT: &str = "[ctrl + o to collapse output]";
+ const MAX_INTERACTION_PREVIEW_CHARS: usize = 80;
+ 
+ pub(crate) struct OutputLinesParams {
+@@ -44,8 +47,9 @@ pub(crate) fn new_active_exec_command(
      source: ExecCommandSource,
      interaction_input: Option<String>,
      animations_enabled: bool,
@@ -220,7 +351,7 @@ index 1d5892a..71ebda5 100644
          ExecCall {
              call_id,
              command,
-@@ -57,7 +59,9 @@ pub(crate) fn new_active_exec_command(
+@@ -57,7 +61,9 @@ pub(crate) fn new_active_exec_command(
              interaction_input,
          },
          animations_enabled,
@@ -231,7 +362,7 @@ index 1d5892a..71ebda5 100644
  }
  
  fn format_unified_exec_interaction(command: &[String], input: Option<&str>) -> String {
-@@ -146,14 +150,14 @@ pub(crate) fn output_lines(
+@@ -146,14 +152,14 @@ pub(crate) fn output_lines(
          out.push(line);
      }
  
@@ -249,7 +380,7 @@ index 1d5892a..71ebda5 100644
          out.push(format!("… +{omitted} lines").into());
      }
  
-@@ -431,8 +435,12 @@ impl ExecCell {
+@@ -431,8 +437,12 @@ impl ExecCell {
          }
  
          if let Some(output) = call.output.as_ref() {
@@ -262,7 +393,7 @@ index 1d5892a..71ebda5 100644
              } else {
                  TOOL_CALL_MAX_LINES
              };
-@@ -447,6 +455,8 @@ impl ExecCell {
+@@ -447,6 +457,8 @@ impl ExecCell {
              );
              let display_limit = if call.is_user_shell_command() {
                  USER_SHELL_TOOL_CALL_MAX_LINES
@@ -271,7 +402,7 @@ index 1d5892a..71ebda5 100644
              } else {
                  layout.output_max_lines
              };
-@@ -479,15 +489,19 @@ impl ExecCell {
+@@ -479,19 +491,41 @@ impl ExecCell {
                      Span::from(layout.output_block.initial_prefix).dim(),
                      Span::from(layout.output_block.subsequent_prefix),
                  );
@@ -284,10 +415,10 @@ index 1d5892a..71ebda5 100644
 -                        Span::from(layout.output_block.subsequent_prefix).dim(),
 -                    )),
 -                );
-+                let trimmed_output = if full_output_mode {
-+                    prefixed_output
++                let (trimmed_output, output_collapsed) = if full_output_mode {
++                    (prefixed_output.clone(), false)
 +                } else {
-+                    Self::truncate_lines_middle(
++                    let trimmed_output = Self::truncate_lines_middle(
 +                        &prefixed_output,
 +                        display_limit,
 +                        width,
@@ -295,11 +426,44 @@ index 1d5892a..71ebda5 100644
 +                        Some(Line::from(
 +                            Span::from(layout.output_block.subsequent_prefix).dim(),
 +                        )),
-+                    )
++                    );
++                    let output_collapsed = raw_output.omitted.unwrap_or(0) > 0
++                        || trimmed_output.len() < prefixed_output.len();
++                    (trimmed_output, output_collapsed)
 +                };
  
                  if !trimmed_output.is_empty() {
                      lines.extend(trimmed_output);
+                 }
++                if !call.is_user_shell_command() {
++                    let hint = if full_output_mode {
++                        Some(TOOL_OUTPUT_COLLAPSE_HINT)
++                    } else if output_collapsed {
++                        Some(TOOL_OUTPUT_EXPAND_HINT)
++                    } else {
++                        None
++                    };
++                    if let Some(hint_text) = hint {
++                        lines.push(Self::tool_output_toggle_hint_line(
++                            layout.output_block.subsequent_prefix,
++                            hint_text,
++                        ));
++                    }
++                }
+             }
+         }
+ 
+@@ -632,6 +666,10 @@ impl ExecCell {
+         line.push_span(format!("… +{omitted} lines").dim());
+         line
+     }
++
++    fn tool_output_toggle_hint_line(prefix: &'static str, hint_text: &'static str) -> Line<'static> {
++        Line::from(vec![Span::from(prefix).dim(), Span::from(hint_text).dim()])
++    }
+ }
+ 
+ #[derive(Clone, Copy)]
 diff --git a/codex-rs/tui_app_server/src/pager_overlay.rs b/codex-rs/tui_app_server/src/pager_overlay.rs
 index a9ab34a..7cb5672 100644
 --- a/codex-rs/tui_app_server/src/pager_overlay.rs

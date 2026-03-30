@@ -2,7 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-MODIFICATIONS_DIR="$SCRIPT_DIR/modifications-main"
+REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+MODIFICATIONS_DIR="$REPO_ROOT/modifications-main"
 CODEX_REPO="https://github.com/openai/codex.git"
 CODEX_REF="main"
 WORKDIR="${TMPDIR:-/tmp}/codex-full-tool-output-main-build"
@@ -14,7 +15,7 @@ CONFIG_EDIT=true
 
 usage() {
   cat <<USAGE
-Usage: ./install-main.sh [options]
+Usage: ./scripts/install-source-main.sh [options]
 
 Builds Codex from upstream main, overlays this repo's modifications-main/,
 and installs a test binary.
@@ -30,9 +31,9 @@ Options:
   -h, --help             Show this help.
 
 Examples:
-  ./install-main.sh
-  ./install-main.sh --binary-name codex-main-test
-  ./install-main.sh --install-dir ~/.local/bin --binary-name codex-main
+  ./scripts/install-source-main.sh
+  ./scripts/install-source-main.sh --binary-name codex-main-test
+  ./scripts/install-source-main.sh --install-dir ~/.local/bin --binary-name codex-main
 USAGE
 }
 

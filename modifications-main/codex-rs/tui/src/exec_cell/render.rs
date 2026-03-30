@@ -29,6 +29,8 @@ use unicode_width::UnicodeWidthStr;
 
 pub(crate) const TOOL_CALL_MAX_LINES: usize = 5;
 const USER_SHELL_TOOL_CALL_MAX_LINES: usize = 50;
+const TOOL_OUTPUT_EXPAND_HINT: &str = "[ctrl + o to expand output]";
+const TOOL_OUTPUT_COLLAPSE_HINT: &str = "[ctrl + o to collapse output]";
 const MAX_INTERACTION_PREVIEW_CHARS: usize = 80;
 
 pub(crate) struct OutputLinesParams {
@@ -489,10 +491,10 @@ impl ExecCell {
                     Span::from(layout.output_block.initial_prefix).dim(),
                     Span::from(layout.output_block.subsequent_prefix),
                 );
-                let trimmed_output = if full_output_mode {
-                    prefixed_output
+                let (trimmed_output, output_collapsed) = if full_output_mode {
+                    (prefixed_output.clone(), false)
                 } else {
-                    Self::truncate_lines_middle(
+                    let trimmed_output = Self::truncate_lines_middle(
                         &prefixed_output,
                         display_limit,
                         width,
@@ -500,11 +502,29 @@ impl ExecCell {
                         Some(Line::from(
                             Span::from(layout.output_block.subsequent_prefix).dim(),
                         )),
-                    )
+                    );
+                    let output_collapsed = raw_output.omitted.unwrap_or(0) > 0
+                        || trimmed_output.len() < prefixed_output.len();
+                    (trimmed_output, output_collapsed)
                 };
 
                 if !trimmed_output.is_empty() {
                     lines.extend(trimmed_output);
+                }
+                if !call.is_user_shell_command() {
+                    let hint = if full_output_mode {
+                        Some(TOOL_OUTPUT_COLLAPSE_HINT)
+                    } else if output_collapsed {
+                        Some(TOOL_OUTPUT_EXPAND_HINT)
+                    } else {
+                        None
+                    };
+                    if let Some(hint_text) = hint {
+                        lines.push(Self::tool_output_toggle_hint_line(
+                            layout.output_block.subsequent_prefix,
+                            hint_text,
+                        ));
+                    }
                 }
             }
         }
@@ -645,6 +665,10 @@ impl ExecCell {
         let mut line = prefix.cloned().unwrap_or_default();
         line.push_span(format!("… +{omitted} lines").dim());
         line
+    }
+
+    fn tool_output_toggle_hint_line(prefix: &'static str, hint_text: &'static str) -> Line<'static> {
+        Line::from(vec![Span::from(prefix).dim(), Span::from(hint_text).dim()])
     }
 }
 
